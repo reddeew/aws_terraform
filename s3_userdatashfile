@@ -1,0 +1,47 @@
+provider "aws" {
+  region = "us-west-2"  # Update with your desired region
+}
+
+resource "aws_instance" "example" {
+  ami           = "ami-12345678"  # Specify your desired AMI ID
+  instance_type = "t2.micro"      # Specify your desired instance type
+  key_name      = "your-key-pair" # Specify the key pair to access the instance
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y aws-cli
+
+              # Install ekctl from S3 bucket
+              aws s3 cp s3://your-bucket/ekctl /usr/local/bin/ekctl
+              chmod +x /usr/local/bin/ekctl
+
+              # Install kubectl from S3 bucket
+              aws s3 cp s3://your-bucket/kubectl /usr/local/bin/kubectl
+              chmod +x /usr/local/bin/kubectl
+              EOF
+}
+
+resource "aws_iam_instance_profile" "example" {
+  name = "example-instance-profile"
+
+  roles = [aws_iam_role.example.id]
+}
+
+resource "aws_iam_role" "example" {
+  name = "example-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  managed_policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess" # You may need to grant more permissions based on your use case
+  ]
+}
