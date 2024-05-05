@@ -1,3 +1,33 @@
+# remote privions
+###################
+provider "aws" {
+  region = "your-region"
+}
+
+variable "instance_id" {
+  description = "EC2 instance ID where scripts will be executed"
+}
+
+resource "aws_ssm_association" "run_commands" {
+  name                   = "execute-commands"
+  targets {
+    key    = "InstanceIds"
+    values = [var.instance_id]
+  }
+
+  parameters = {
+    commands = [
+      "echo 'Running script on the existing EC2 instance'",
+      // Add your script commands here
+    ]
+  }
+
+  // Specify the instance ID as a dependency
+  depends_on = [aws_instance.ec2_instance]
+}
+
+###############################
+
 provider "aws" {
   region = "us-east-1"  # Replace with your desired region
 }
