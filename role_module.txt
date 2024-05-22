@@ -1,0 +1,126 @@
+Step 1: Modify the IAM Role Module
+Update the module files in the iam_role_module directory to accept dynamic inputs for policy ARNs and AWS principal IDs.
+
+1. main.tf
+hcl
+Copy code
+variable "roles" {
+  description = "List of roles to create with their configurations"
+  type = list(object({
+    name             = string
+    trusted_entities = list(object({
+      type        = string
+      identifiers = list(string)
+    }))
+    policy_arns = list(string)
+  }))
+}
+
+resource "aws_iam_role" "this" {
+  for_each = { for role in var.roles : role.name => role }
+
+  name = each.key
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      for trusted_entity in each.value.trusted_entities : {
+        Effect = "Allow"
+        Principal = {
+          (trusted_entity.type) = trusted_entity.identifiers
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  for_each = { for role in var.roles : role.name => role }
+
+  count      = length(each.value.policy_arns)
+  role       = aws_iam_role.this[each.key].name
+  policy_arn = each.value.policy_arns[count.index]
+}
+2. variables.tf
+hcl
+Copy code
+variable "roles" {
+  description = "List of roles to create with their configurations"
+  type = list(object({
+    name             = string
+    trusted_entities = list(object({
+      type        = string
+      identifiers = list(string)
+    }))
+    policy_arns = list(string)
+  }))
+}
+3. outputs.tf
+hcl
+Copy code
+output "role_arns" {
+  description = "ARNs of the created IAM Roles"
+  value       = [for role in aws_iam_role.this : role.arn]
+}
+Step 2: Update the Main Configuration
+In your main Terraform configuration, pass the roles with their corresponding trusted entities and policy ARNs dynamically.
+
+1. main.tf
+hcl
+Copy code
+provider "aws" {
+  region = "us-west-2"
+}
+
+module "iam_roles" {
+  source = "./iam_role_module"
+  roles = [
+    {
+      name             = "role1"
+      trusted_entities = [
+        {
+          type        = "Service"
+          identifiers = ["ec2.amazonaws.com"]
+        },
+        {
+          type        = "AWS"
+          identifiers = ["arn:aws:iam::123456789012:role/example-role1"]
+        }
+      ]
+      policy_arns = [
+        "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+      ]
+    },
+    {
+      name             = "role2"
+      trusted_entities = [
+        {
+          type        = "Service"
+          identifiers = ["lambda.amazonaws.com"]
+        },
+        {
+          type        = "AWS"
+          identifiers = ["arn:aws:iam::123456789012:role/example-role2"]
+        }
+      ]
+      policy_arns = [
+        "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+      ]
+    }
+  ]
+}
+Step 3: Initialize and Apply the Configuration
+Run the following commands in your main project directory to initialize and apply the configuration:
+
+sh
+Copy code
+terraform init
+terraform apply
+This configuration allows you to pass a list of roles, each with its own set of trusted entities and policy ARNs, dynamically. The module processes each role independently, creating the appropriate IAM role, setting the assume role policy, and attaching the specified policies.
+
+
+
+
+
+
