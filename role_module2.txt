@@ -1,0 +1,104 @@
+Step 1: Create the IAM Role Module
+Create a directory for your module, e.g., iam_role_module. Inside this directory, create the following files:
+
+1. main.tf
+hcl
+Copy code
+variable "role_names" {
+  description = "List of IAM Role names"
+  type        = list(string)
+}
+
+variable "trusted_entities" {
+  description = "Trusted entities for the IAM Role"
+  type        = list(object({
+    type        = string
+    identifiers = list(string)
+  }))
+}
+
+variable "policy_arn" {
+  description = "ARN of the policy to attach to the role"
+  type        = string
+}
+
+resource "aws_iam_role" "this" {
+  for_each = toset(var.role_names)
+
+  name = each.value
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      for trusted_entity in var.trusted_entities : {
+        Effect = "Allow"
+        Principal = {
+          (trusted_entity.type) = trusted_entity.identifiers
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  for_each = toset(var.role_names)
+
+  role       = aws_iam_role.this[each.key].name
+  policy_arn = var.policy_arn
+}
+2. variables.tf
+hcl
+Copy code
+variable "role_names" {
+  description = "List of IAM Role names"
+  type        = list(string)
+}
+
+variable "trusted_entities" {
+  description = "Trusted entities for the IAM Role"
+  type        = list(object({
+    type        = string
+    identifiers = list(string)
+  }))
+}
+
+variable "policy_arn" {
+  description = "ARN of the policy to attach to the role"
+  type        = string
+}
+3. outputs.tf
+hcl
+Copy code
+output "role_arns" {
+  description = "ARNs of the created IAM Roles"
+  value       = [for role in aws_iam_role.this : role.arn]
+}
+Step 2: Call the Module from Your Main Configuration
+In your main Terraform configuration, specify the role names, trusted entities, and policy ARN dynamically.
+
+1. main.tf
+hcl
+Copy code
+provider "aws" {
+  region = "us-west-2"
+}
+
+module "iam_roles" {
+  source = "./iam_role_module"
+  role_names = ["role1", "role2", "role3"]
+  trusted_entities = [
+    {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::123456789012:role/example-role"]
+    }
+  ]
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+}
+Step 3: Initialize and Apply the Configuration
+Run the following commands in your main project directory to initialize and apply the configuration:
+
+sh
+Copy code
+terraform init
+terraform apply
